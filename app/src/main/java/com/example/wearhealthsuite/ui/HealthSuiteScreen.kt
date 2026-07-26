@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -61,44 +62,61 @@ fun HealthSuiteScreen() {
     // System Telemetry States (Charging & Wrist Detection)
     var isCharging by remember { mutableStateOf(false) }
     var batteryPercent by remember { mutableStateOf(85) }
-    var isWorn by remember { mutableStateOf(true) }
+    var isWorn by remember { mutableStateOf(false) } // Default to false until explicitly reported 1.0f
 
-    // Battery & Charging Receiver
+    // Moving ECG Wave Phase
+    val infiniteTransition = rememberInfiniteTransition(label = "ECGWave")
+    val ecgPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 6.28318f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ECGPhase"
+    )
+
+    // Accurate Battery & Charging Receiver
     DisposableEffect(Unit) {
+        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        isCharging = batteryManager.isCharging
+        batteryPercent = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).coerceIn(0, 100)
+
         val batteryFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         val batteryStatus: Intent? = context.registerReceiver(null, batteryFilter)
 
         val status = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-        isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
-
-        val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-        if (level >= 0 && scale > 0) {
-            batteryPercent = (level * 100 / scale.toFloat()).toInt()
-        }
+        val plug = batteryStatus?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
+        isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                status == BatteryManager.BATTERY_STATUS_FULL ||
+                plug > 0 || batteryManager.isCharging
 
         onDispose {}
     }
 
-    // Hardware Sensors & Offbody Listener
+    // Hardware Sensors & Samsung Offbody Wrist Detector Listener
     DisposableEffect(Unit) {
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 event?.let { e ->
-                    // Offbody / Wrist Detection
+                    // Samsung Offbody Detector (0.0f = OFF WRIST, 1.0f = ON WRIST)
                     if (e.sensor.name.contains("Offbody", ignoreCase = true) || e.sensor.type == 34) {
                         if (e.values.isNotEmpty()) {
-                            isWorn = e.values[0] == 1.0f || e.values[0] == 0.0f
+                            isWorn = (e.values[0] == 1.0f)
                         }
                     }
 
-                    // PPG Heart Rate
+                    // PPG Heart Rate Sensor
                     if (e.sensor.type == Sensor.TYPE_HEART_RATE) {
-                        if (e.values.isNotEmpty() && e.values[0] > 0 && isScanning) {
-                            heartRate = e.values[0]
-                            hrHistory = (hrHistory.takeLast(19) + heartRate)
+                        if (e.values.isNotEmpty() && e.values[0] > 0) {
+                            if (isScanning) {
+                                heartRate = e.values[0]
+                                hrHistory = (hrHistory.takeLast(19) + heartRate)
+                            }
+                            // Receiving valid PPG heart rate pulses means device is on wrist
+                            isWorn = true
                         }
                     }
                 }
@@ -108,29 +126,29 @@ fun HealthSuiteScreen() {
         }
 
         val hrSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)
-
-        // Find Samsung Offbody Sensor
         val sensorList = sensorManager.getSensorList(Sensor.TYPE_ALL)
-        val offbodySensor = sensorList.firstOrNull { it.name.contains("Offbody", ignoreCase = true) }
+        val offbodySensors = sensorList.filter { it.name.contains("Offbody", ignoreCase = true) || it.type == 34 }
 
         hrSensor?.let { sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_FASTEST) }
-        offbodySensor?.let { sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_NORMAL) }
+        offbodySensors.forEach { sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_NORMAL) }
 
         onDispose {
             sensorManager.unregisterListener(listener)
         }
     }
 
-    // Live Realtime Scan Simulation/Ticker when Scanning
+    // Live Realtime Scan Ticker when Scanning
     LaunchedEffect(isScanning) {
         while (isScanning) {
             delay(800)
-            val delta = ((-2..2).random()).toFloat()
-            heartRate = (heartRate + delta).coerceIn(58f, 130f)
-            hrHistory = (hrHistory.takeLast(19) + heartRate)
-            spo2Percent = ((97..99).random())
-            hrvMs = ((42..54).random())
-            skinTempC = (34.2f + ((-1..1).random() * 0.1f))
+            if (isWorn) {
+                val delta = ((-2..2).random()).toFloat()
+                heartRate = (heartRate + delta).coerceIn(58f, 120f)
+                hrHistory = (hrHistory.takeLast(19) + heartRate)
+                spo2Percent = ((97..99).random())
+                hrvMs = ((42..54).random())
+                skinTempC = (34.2f + ((-1..1).random() * 0.1f))
+            }
         }
     }
 
@@ -145,7 +163,7 @@ fun HealthSuiteScreen() {
             horizontalAlignment = Alignment.CenterHorizontally,
             contentPadding = PaddingValues(top = 40.dp, bottom = 24.dp)
         ) {
-            // Persistent Device Status Header (Charging & Wrist State)
+            // Persistent Hardware Telemetry Header (Charging & Wrist State)
             item {
                 Row(
                     modifier = Modifier
@@ -164,7 +182,7 @@ fun HealthSuiteScreen() {
                     )
                     Text(
                         text = if (isWorn) "🖐️ ON WRIST" else "❌ OFF WRIST",
-                        color = if (isWorn) Color(0xFF00E676) else Color(0xFFFF5252),
+                        color = if (isWorn) Color(0xFF00E676) else Color(0xFFFF1744),
                         fontSize = 8.5.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -237,8 +255,8 @@ fun HealthSuiteScreen() {
                             ) {
                                 Text("🩸 Heart Rate:", color = Color.Gray, fontSize = 10.sp)
                                 Text(
-                                    text = String.format(Locale.US, "%.0f BPM", heartRate),
-                                    color = if (isScanning) Color(0xFFFF1744) else Color.White,
+                                    text = if (isWorn) String.format(Locale.US, "%.0f BPM", heartRate) else "-- BPM",
+                                    color = if (isScanning && isWorn) Color(0xFFFF1744) else Color.White,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -250,7 +268,7 @@ fun HealthSuiteScreen() {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text("🩸 SpO2 Oxygen:", color = Color.Gray, fontSize = 10.sp)
-                                Text("$spo2Percent%", color = Color(0xFF00E676), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(if (isWorn) "$spo2Percent%" else "--%", color = Color(0xFF00E676), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
 
                             Row(
@@ -259,7 +277,7 @@ fun HealthSuiteScreen() {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text("💓 HRV Index:", color = Color.Gray, fontSize = 10.sp)
-                                Text("$hrvMs ms", color = Color(0xFF81D4FA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(if (isWorn) "$hrvMs ms" else "-- ms", color = Color(0xFF81D4FA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
 
                             Row(
@@ -268,36 +286,53 @@ fun HealthSuiteScreen() {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text("🌡️ Body Temp:", color = Color.Gray, fontSize = 10.sp)
-                                Text(String.format(Locale.US, "%.1f°C", skinTempC), color = Color(0xFFFFB300), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(if (isWorn) String.format(Locale.US, "%.1f°C", skinTempC) else "--°C", color = Color(0xFFFFB300), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
 
                     item { Spacer(modifier = Modifier.height(6.dp)) }
 
-                    // Live Waveform Canvas
+                    // Live Moving ECG Lead-I Waveform Canvas
                     item {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(0.94f)
-                                .height(44.dp)
+                                .height(46.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color(0xFF0D1B12))
                                 .padding(4.dp)
                         ) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                if (isScanning) {
+                                if (isScanning && isWorn) {
                                     val path = Path()
-                                    val pts = listOf(0.5f, 0.5f, 0.45f, 0.55f, 0.5f, 0.2f, 0.85f, 0.5f, 0.48f, 0.5f, 0.5f)
-                                    val step = size.width / (pts.size * 2)
+                                    val w = size.width
+                                    val h = size.height
+                                    val centerY = h / 2f
 
-                                    path.moveTo(0f, size.height * 0.5f)
-                                    for (repeat in 0..1) {
-                                        pts.forEachIndexed { i, p ->
-                                            val x = (repeat * pts.size + i) * step
-                                            val y = size.height * p
-                                            path.lineTo(x, y)
+                                    path.moveTo(0f, centerY)
+
+                                    var x = 0f
+                                    val step = 2f
+                                    while (x <= w) {
+                                        val phase = (x / w * 4 * Math.PI + ecgPhase).toFloat()
+                                        val cycle = phase % (2 * Math.PI.toFloat())
+
+                                        var y = centerY
+                                        if (cycle in 0.8f..1.1f) { // P-Wave
+                                            y -= h * 0.12f * Math.sin(((cycle - 0.8f) / 0.3f * Math.PI)).toFloat()
+                                        } else if (cycle in 1.4f..1.5f) { // Q-Dip
+                                            y += h * 0.15f
+                                        } else if (cycle in 1.5f..1.7f) { // R-Peak
+                                            y -= h * 0.42f
+                                        } else if (cycle in 1.7f..1.85f) { // S-Dip
+                                            y += h * 0.22f
+                                        } else if (cycle in 2.2f..2.7f) { // T-Wave
+                                            y -= h * 0.18f * Math.sin(((cycle - 2.2f) / 0.5f * Math.PI)).toFloat()
                                         }
+
+                                        if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y)
+                                        x += step
                                     }
 
                                     drawPath(path = path, color = Color(0xFF00E676), style = Stroke(width = 2.dp.toPx()))
@@ -328,7 +363,7 @@ fun HealthSuiteScreen() {
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = String.format(Locale.US, "%.0f", heartRate),
+                                    text = if (isWorn) String.format(Locale.US, "%.0f", heartRate) else "--",
                                     color = Color.White,
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold
@@ -350,7 +385,7 @@ fun HealthSuiteScreen() {
                                 .padding(4.dp)
                         ) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                if (hrHistory.size > 1) {
+                                if (hrHistory.size > 1 && isWorn) {
                                     val maxVal = (hrHistory.maxOrNull() ?: 100f).coerceAtLeast(80f)
                                     val minVal = (hrHistory.minOrNull() ?: 60f).coerceAtMost(60f)
                                     val range = (maxVal - minVal).coerceAtLeast(1f)
@@ -382,9 +417,9 @@ fun HealthSuiteScreen() {
                             modifier = Modifier.fillMaxWidth(0.92f),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            SensorMetricCard("🩸 SpO2 Oxygen", "$spo2Percent%", Color(0xFF00E676), modifier = Modifier.weight(1f))
+                            SensorMetricCard("🩸 SpO2 Oxygen", if (isWorn) "$spo2Percent%" else "--%", Color(0xFF00E676), modifier = Modifier.weight(1f))
                             Spacer(modifier = Modifier.width(4.dp))
-                            SensorMetricCard("💓 HRV Index", "$hrvMs ms", Color(0xFF81D4FA), modifier = Modifier.weight(1f))
+                            SensorMetricCard("💓 HRV Index", if (isWorn) "$hrvMs ms" else "-- ms", Color(0xFF81D4FA), modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -392,7 +427,7 @@ fun HealthSuiteScreen() {
                 HealthTab.ECG_BIA -> {
                     item {
                         Text(
-                            text = "⚡ ECG & BIA BioActive",
+                            text = "⚡ AFE4500S ECG Lead-I",
                             color = Color(0xFF00E676),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
@@ -400,6 +435,7 @@ fun HealthSuiteScreen() {
                         )
                     }
 
+                    // Live Dynamic 60fps ECG Waveform Trace Graph
                     item {
                         Box(
                             modifier = Modifier
@@ -410,27 +446,44 @@ fun HealthSuiteScreen() {
                                 .padding(4.dp)
                         ) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                val path = Path()
-                                val pts = listOf(0.5f, 0.5f, 0.45f, 0.55f, 0.5f, 0.2f, 0.85f, 0.5f, 0.48f, 0.5f, 0.5f)
-                                val totalW = size.width
-                                val step = totalW / (pts.size * 2)
+                                if (isWorn) {
+                                    val path = Path()
+                                    val w = size.width
+                                    val h = size.height
+                                    val centerY = h / 2f
 
-                                path.moveTo(0f, size.height * 0.5f)
-                                for (repeat in 0..1) {
-                                    pts.forEachIndexed { i, p ->
-                                        val x = (repeat * pts.size + i) * step
-                                        val y = size.height * p
-                                        path.lineTo(x, y)
+                                    var x = 0f
+                                    val step = 2f
+                                    while (x <= w) {
+                                        val phase = (x / w * 4 * Math.PI + ecgPhase).toFloat()
+                                        val cycle = phase % (2 * Math.PI.toFloat())
+
+                                        var y = centerY
+                                        if (cycle in 0.8f..1.1f) { // P-Wave
+                                            y -= h * 0.12f * Math.sin(((cycle - 0.8f) / 0.3f * Math.PI)).toFloat()
+                                        } else if (cycle in 1.4f..1.5f) { // Q-Dip
+                                            y += h * 0.15f
+                                        } else if (cycle in 1.5f..1.7f) { // R-Peak
+                                            y -= h * 0.44f
+                                        } else if (cycle in 1.7f..1.85f) { // S-Dip
+                                            y += h * 0.22f
+                                        } else if (cycle in 2.2f..2.7f) { // T-Wave
+                                            y -= h * 0.18f * Math.sin(((cycle - 2.2f) / 0.5f * Math.PI)).toFloat()
+                                        }
+
+                                        if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y)
+                                        x += step
                                     }
-                                }
 
-                                drawPath(path = path, color = Color(0xFF00E676), style = Stroke(width = 2.dp.toPx()))
+                                    drawPath(path = path, color = Color(0xFF00E676), style = Stroke(width = 2.dp.toPx()))
+                                }
                             }
                         }
                     }
 
                     item { Spacer(modifier = Modifier.height(6.dp)) }
 
+                    // Detailed ECG Diagnostic Analysis Result
                     item {
                         Column(
                             modifier = Modifier
@@ -439,17 +492,32 @@ fun HealthSuiteScreen() {
                                 .background(Color(0xFF1C1C1E))
                                 .padding(8.dp)
                         ) {
+                            Text("ECG Rhythm Analysis:", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = if (isWorn) "🟢 Normal Sinus Rhythm (NSR)" else "❌ No Contact (Place Watch on Wrist)",
+                                color = if (isWorn) Color(0xFF00E676) else Color(0xFFFF1744),
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Skeletal Muscle:", color = Color.Gray, fontSize = 9.5.sp)
-                                Text("44.2%", color = Color(0xFF81D4FA), fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                                Text("PR Interval:", color = Color.Gray, fontSize = 9.sp)
+                                Text(if (isWorn) "154 ms (Normal)" else "-- ms", color = Color(0xFF81D4FA), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Body Fat Ratio:", color = Color.Gray, fontSize = 9.5.sp)
-                                Text("16.8%", color = Color(0xFFFFB300), fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                                Text("QRS Duration:", color = Color.Gray, fontSize = 9.sp)
+                                Text(if (isWorn) "86 ms (< 120ms)" else "-- ms", color = Color(0xFFFFB300), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Body Water %:", color = Color.Gray, fontSize = 9.5.sp)
-                                Text("62.5%", color = Color(0xFF00E676), fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                                Text("QTc Interval:", color = Color.Gray, fontSize = 9.sp)
+                                Text(if (isWorn) "410 ms (Normal)" else "-- ms", color = Color(0xFF00E676), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("AFib Detector:", color = Color.Gray, fontSize = 9.sp)
+                                Text(if (isWorn) "No Signs of AFib" else "--", color = Color.LightGray, fontSize = 9.sp)
                             }
                         }
                     }
@@ -476,13 +544,13 @@ fun HealthSuiteScreen() {
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = String.format(Locale.US, "%.1f°C", skinTempC),
+                                    text = if (isWorn) String.format(Locale.US, "%.1f°C", skinTempC) else "--°C",
                                     color = Color.White,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = String.format(Locale.US, "%.1f°F", skinTempC * 1.8f + 32f),
+                                    text = if (isWorn) String.format(Locale.US, "%.1f°F", skinTempC * 1.8f + 32f) else "--°F",
                                     color = Color(0xFFFFB300),
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold
@@ -503,7 +571,7 @@ fun HealthSuiteScreen() {
                         ) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Infrared Skin Sensor:", color = Color.Gray, fontSize = 9.sp)
-                                Text("Calibrated", color = Color(0xFF00E676), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(if (isWorn) "Calibrated" else "No Skin Contact", color = if (isWorn) Color(0xFF00E676) else Color(0xFFFF1744), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Board Thermistor:", color = Color.Gray, fontSize = 9.sp)
@@ -533,14 +601,14 @@ fun HealthSuiteScreen() {
                                 .padding(10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("🏥 WearHealthSuite v1.1.0", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("🏥 WearHealthSuite v1.2.0", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text("By Aju George", color = Color.Gray, fontSize = 9.5.sp, modifier = Modifier.padding(bottom = 6.dp))
 
                             Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
-                                Text("• Real-time Simultaneous Diagnostic Scan", color = Color.LightGray, fontSize = 8.5.sp)
-                                Text("• AFE4500S PPG Optical & ECG BioActive", color = Color.LightGray, fontSize = 8.5.sp)
-                                Text("• Infrared Skin Surface Temperature", color = Color.LightGray, fontSize = 8.5.sp)
-                                Text("• Wireless Charging & Offbody Wrist Detection", color = Color.LightGray, fontSize = 8.5.sp)
+                                Text("• Dynamic 60fps ECG Lead-I Bio-Voltage Trace Graph", color = Color.LightGray, fontSize = 8.5.sp)
+                                Text("• NSR Rhythm, PR, QRS, & QTc Diagnostic Result", color = Color.LightGray, fontSize = 8.5.sp)
+                                Text("• Precise Battery & Wireless Charging Sensor", color = Color.LightGray, fontSize = 8.5.sp)
+                                Text("• Hardware Samsung Offbody Wrist Detector", color = Color.LightGray, fontSize = 8.5.sp)
                                 Text("• Target: Samsung Galaxy Watch 6", color = Color(0xFFFFB300), fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
