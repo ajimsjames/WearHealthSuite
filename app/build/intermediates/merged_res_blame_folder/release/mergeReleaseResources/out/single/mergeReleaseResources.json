@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "com.example.wearhealthsuite.app-release-53:/drawable_ic_launcher.xml.flat",
+        "source": "com.example.wearhealthsuite.app-main-54:/drawable/ic_launcher.xml"
+    },
+    {
+        "merged": "com.example.wearhealthsuite.app-release-53:/drawable_ic_launcher_round.xml.flat",
+        "source": "com.example.wearhealthsuite.app-main-54:/drawable/ic_launcher_round.xml"
+    }
+]
