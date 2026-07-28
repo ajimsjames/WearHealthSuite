@@ -11,7 +11,7 @@ android {
         applicationId = "com.ajimsjames.wearhealthsuite"
         minSdk = 30
         targetSdk = 33
-        versionCode = 8
+        versionCode = 7
         versionName = "2.2.0"
 
         vectorDrawables {
