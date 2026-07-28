@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.wearhealthsuite"
+    namespace = "com.ajimsjames.wearhealthsuite"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.wearhealthsuite"
+        applicationId = "com.ajimsjames.wearhealthsuite"
         minSdk = 30
         targetSdk = 33
-        versionCode = 5
-        versionName = "1.4.0"
+        versionCode = 6
+        versionName = "2.0.0"
 
         vectorDrawables {
             useSupportLibrary = true

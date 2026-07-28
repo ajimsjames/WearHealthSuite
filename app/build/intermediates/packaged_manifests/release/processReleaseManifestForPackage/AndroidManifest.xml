@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.wearhealthsuite"
-    android:versionCode="5"
-    android:versionName="1.4.0" >
+    package="com.ajimsjames.wearhealthsuite"
+    android:versionCode="6"
+    android:versionName="2.0.0" >
 
     <uses-sdk
         android:minSdkVersion="30"
@@ -33,10 +33,10 @@
         android:required="false" />
 
     <permission
-        android:name="com.example.wearhealthsuite.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:name="com.ajimsjames.wearhealthsuite.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         android:protectionLevel="signature" />
 
-    <uses-permission android:name="com.example.wearhealthsuite.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+    <uses-permission android:name="com.ajimsjames.wearhealthsuite.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
 
     <application
         android:allowBackup="true"
@@ -48,7 +48,7 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault" >
         <activity
-            android:name="com.example.wearhealthsuite.MainActivity"
+            android:name="com.ajimsjames.wearhealthsuite.MainActivity"
             android:exported="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.DeviceDefault" >
@@ -69,7 +69,7 @@
 
         <provider
             android:name="androidx.startup.InitializationProvider"
-            android:authorities="com.example.wearhealthsuite.androidx-startup"
+            android:authorities="com.ajimsjames.wearhealthsuite.androidx-startup"
             android:exported="false" >
             <meta-data
                 android:name="androidx.emoji2.text.EmojiCompatInitializer"
