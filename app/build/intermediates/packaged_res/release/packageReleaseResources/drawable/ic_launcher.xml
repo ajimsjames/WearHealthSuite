@@ -14,20 +14,14 @@
                 android:endX="104"
                 android:endY="104"
                 android:type="linear">
-                <item android:offset="0.0" android:color="#FFD50000" />
-                <item android:offset="1.0" android:color="#FF6A0000" />
+                                <item android:offset="0.0" android:color="#FFD50000" />\n                <item android:offset="1.0" android:color="#FF6A0000" />
             </gradient>
         </aapt:attr>
     </path>
-    <!-- ECG Pulse Line -->
     <path
-        android:pathData="M 20,54 L 36,54 L 42,38 L 48,70 L 54,30 L 60,62 L 66,54 L 88,54"
+        android:pathData="M 24,54 L 38,54 L 44,38 L 50,70 L 56,30 L 62,62 L 68,54 L 84,54"
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="5.5"
+        android:strokeWidth="6"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
-    <!-- Heart Symbol -->
-    <path
-        android:pathData="M 54,26 C 50,18 36,18 36,28 C 36,36 54,48 54,48 C 54,48 72,36 72,28 C 72,18 58,18 54,26 Z"
-        android:fillColor="#33FFFFFF" />
 </vector>

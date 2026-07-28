@@ -4,7 +4,15 @@
         "source": "com.ajimsjames.wearhealthsuite.app-main-54:/drawable/ic_launcher.xml"
     },
     {
+        "merged": "/home/aju/.gradle/daemon/8.4/com.ajimsjames.wearhealthsuite.app-release-53:/drawable_ic_launcher.xml.flat",
+        "source": "/home/aju/.gradle/daemon/8.4/com.ajimsjames.wearhealthsuite.app-main-54:/drawable/ic_launcher.xml"
+    },
+    {
         "merged": "com.ajimsjames.wearhealthsuite.app-release-53:/drawable_ic_launcher_round.xml.flat",
         "source": "com.ajimsjames.wearhealthsuite.app-main-54:/drawable/ic_launcher_round.xml"
+    },
+    {
+        "merged": "/home/aju/.gradle/daemon/8.4/com.ajimsjames.wearhealthsuite.app-release-53:/drawable_ic_launcher_round.xml.flat",
+        "source": "/home/aju/.gradle/daemon/8.4/com.ajimsjames.wearhealthsuite.app-main-54:/drawable/ic_launcher_round.xml"
     }
 ]
