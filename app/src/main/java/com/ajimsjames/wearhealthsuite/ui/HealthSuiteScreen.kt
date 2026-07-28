@@ -161,18 +161,17 @@ fun HealthSuiteScreen() {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(top = 40.dp, bottom = 24.dp)
+            contentPadding = PaddingValues(top = 52.dp, bottom = 24.dp)
         ) {
             // Persistent Hardware Telemetry Header (Charging & Wrist State)
             item {
-                Row(
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth(0.94f)
+                        .fillMaxWidth(0.72f)
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(0xFF141416))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = if (isCharging) "⚡ CHARGING ($batteryPercent%)" else "🔋 BATTERY ($batteryPercent%)",
@@ -180,6 +179,7 @@ fun HealthSuiteScreen() {
                         fontSize = 8.5.sp,
                         fontWeight = FontWeight.Bold
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = if (isWorn) "🖐️ ON WRIST" else "❌ OFF WRIST",
                         color = if (isWorn) Color(0xFF00E676) else Color(0xFFFF1744),
